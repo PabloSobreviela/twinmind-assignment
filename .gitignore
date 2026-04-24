@@ -1,0 +1,30 @@
+﻿# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.next/
+
+# Local tooling — never commit
+.claude/
+.strategist-inbox.md
+
+# Reference clones — not part of this project
+_reference/
+
+# Env files
+.env
+.env.local
+.env*.local
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
