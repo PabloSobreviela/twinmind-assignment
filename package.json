@@ -6,6 +6,9 @@
   "scripts": {
     "test": "vitest run"
   },
+  "dependencies": {
+    "openai": "^4.77.0"
+  },
   "devDependencies": {
     "typescript": "^5.5.4",
     "vitest": "^2.0.5"

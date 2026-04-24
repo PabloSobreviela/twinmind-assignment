@@ -31,6 +31,9 @@
  *       pool by the state layer; generators see the merged pool.
  *     • open_questions renders as "(none)" if empty, else as indented
  *       bullet list ("  - " prefix per item).
+ * - Full transcript truncation: keeps the TAIL; marker replaces the head.
+ *   Cutoff is relative to char count, not time — meeting pauses don't
+ *   inflate the truncation point.
  */
 
 import type { ConversationState, SuggestionType } from '../types';
@@ -150,4 +153,30 @@ export function formatClassifierOutput(co: ClassifierOutput): string {
   );
   lines.push(`classifier_recommended_mix: ${co.classifier_recommended_mix.join(', ')}`);
   return lines.join('\n');
+}
+
+/**
+ * Render the full session transcript for chat context. Differs from
+ * formatRollingWindow: no time-window cutoff, but hard character limit.
+ *
+ * If the transcript exceeds charLimit, truncate from the START (keep
+ * the tail = most recent). A marker line precedes the retained portion
+ * so the model knows content was elided. Hard-truncates at the char
+ * boundary — mid-line starts are tolerated; the marker keeps them legible.
+ */
+export function formatFullTranscript(
+  transcript: TranscriptChunk[],
+  charLimit: number,
+): string {
+  if (transcript.length === 0) return '';
+  const sorted = [...transcript].sort((a, b) => a.ts - b.ts);
+  const rendered = sorted
+    .map((c) => `[${formatSeconds(c.ts)}] ${c.chunk.trim()}`)
+    .join('\n');
+  if (rendered.length <= charLimit) return rendered;
+
+  const marker = '[...earlier transcript omitted for length...]';
+  const budget = Math.max(0, charLimit - marker.length - 1);
+  const tail = rendered.slice(-budget);
+  return `${marker}\n${tail}`;
 }

@@ -10,6 +10,8 @@
  *   formatRollingWindow:        2 cases (classifier extraction exemplars)
  *   formatClassifierOutput:     2 cases (generators/shared.ts INPUT FORMAT
  *                                        + empty-optionals case)
+ *   formatFullTranscript:       2 cases (under-limit verbatim, over-limit
+ *                                        truncation behavior)
  */
 
 import { describe, it, expect } from 'vitest';
@@ -18,6 +20,7 @@ import {
   formatPreviousBatchTuples,
   formatRollingWindow,
   formatClassifierOutput,
+  formatFullTranscript,
   type SessionEntity,
   type TranscriptChunk,
   type Batch,
@@ -174,5 +177,32 @@ open_questions:
 unclarified_terms: (none)
 classifier_recommended_mix: answer, answer, question`;
     expect(formatClassifierOutput(co)).toBe(expected);
+  });
+});
+
+describe('formatFullTranscript', () => {
+  it('renders full transcript verbatim when under char limit', () => {
+    const transcript: TranscriptChunk[] = [
+      { ts: 0,   chunk: 'Welcome to the meeting, everyone.' },
+      { ts: 30,  chunk: "Today we're covering the Q3 infra plan." },
+      { ts: 90,  chunk: "Let's start with the Kafka migration." },
+    ];
+    const expected =
+`[00:00:00] Welcome to the meeting, everyone.
+[00:00:30] Today we're covering the Q3 infra plan.
+[00:01:30] Let's start with the Kafka migration.`;
+    expect(formatFullTranscript(transcript, 10_000)).toBe(expected);
+  });
+
+  it('truncates from the start with marker when over char limit', () => {
+    const transcript: TranscriptChunk[] = [
+      { ts: 0,    chunk: 'Early content that should be trimmed.' },
+      { ts: 30,   chunk: 'More early content.' },
+      { ts: 1000, chunk: 'Recent content that stays.' },
+    ];
+    const result = formatFullTranscript(transcript, 80);
+    expect(result.startsWith('[...earlier transcript omitted for length...]')).toBe(true);
+    expect(result.length).toBeLessThanOrEqual(80);
+    expect(result).toContain('Recent content that stays.');
   });
 });
