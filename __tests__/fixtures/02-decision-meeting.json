@@ -1,0 +1,58 @@
+{
+  "name": "02-decision-meeting",
+  "description": "Decision-point state — speakers comparing concrete options (Auth0 $240/mo vs Clerk $99/mo vs build-it-yourself 2 eng-weeks) under a Q3 deadline. Tests the [question, talking, answer] mix where answer commits to a recommendation, talking surfaces a tradeoff frame, question pulls toward an under-examined consideration.",
+  "input": {
+    "transcript": [
+      { "ts": 0, "chunk": "OK, so we need to pick an auth provider before Q3. Auth0 is $240 a month, Clerk is $99, or we build it ourselves which is roughly 2 engineering weeks." },
+      { "ts": 30, "chunk": "The Q3 deadline is binding because the enterprise contract launches then. Building in-house feels risky on that timeline." },
+      { "ts": 60, "chunk": "But $240 a month adds up. And Clerk is unproven for us — we haven't run them in production." }
+    ],
+    "settings": {
+      "rollingWindowSeconds": 180,
+      "antiRepetitionBatchCount": 2,
+      "fullSessionCharLimit": 50000
+    }
+  },
+  "expected": {
+    "classifier": {
+      "conversation_state": "decision_point",
+      "state_evidence": "Speakers explicitly comparing three options (Auth0 $240/mo, Clerk $99/mo, build-it-yourself 2 weeks) under a Q3 deadline. Tradeoffs being weighed in real time.",
+      "salient_entities": ["Auth0", "Clerk", "build-it-yourself", "Q3 deadline"],
+      "session_entities_delta": [
+        { "entity": "Auth0", "op": "add", "attributed_to": null, "numeric_values": ["$240/mo"] },
+        { "entity": "Clerk", "op": "add", "attributed_to": null, "numeric_values": ["$99/mo"] },
+        { "entity": "build-it-yourself", "op": "add", "attributed_to": null, "numeric_values": ["2 engineering weeks"] },
+        { "entity": "Q3 deadline", "op": "add", "attributed_to": null, "numeric_values": null }
+      ],
+      "open_questions": [],
+      "unclarified_terms": [],
+      "classifier_recommended_mix": ["question", "talking", "answer"]
+    },
+    "cards": [
+      {
+        "id": "expected-02-question",
+        "type": "question",
+        "preview": "What's the actual blast radius if Clerk has an outage during the enterprise launch?",
+        "full_context": "The 'unproven for us' concern is fuzzy. Tightening it: what concretely fails if Clerk goes down for an hour? Login only, or session validation too? That determines whether to accept the unknown or not.",
+        "grounded_in": ["[01:00] And Clerk is unproven for us — we haven't run them in production."],
+        "tuple": { "entity": "Clerk outage scenario", "action": "questioned", "core_claim": "what concrete services fail under outage" }
+      },
+      {
+        "id": "expected-02-talking",
+        "type": "talking",
+        "preview": "$240/mo vs $99/mo is a $1,692/year delta — small relative to 2 eng-weeks (roughly $20k loaded).",
+        "full_context": "Comparing pricing in isolation misses the build-it-yourself opportunity cost. 2 engineering weeks at typical loaded rates is in the $15-25k range — eight-plus years of the $1,692/year price delta between the two SaaS options.",
+        "grounded_in": ["[00:00] Auth0 is $240 a month, Clerk is $99, or we build it ourselves which is roughly 2 engineering weeks."],
+        "tuple": { "entity": "auth provider total cost", "action": "claimed", "core_claim": "2 eng-weeks dwarfs years of SaaS price delta" }
+      },
+      {
+        "id": "expected-02-answer",
+        "type": "answer",
+        "preview": "Pick Auth0 for Q3 launch. Migrate to Clerk in Q4 if pricing matters once enterprise contract is live.",
+        "full_context": "Under a binding deadline with an unproven option, the proven-but-pricier choice is the lower-risk path. The price delta is recoverable later via migration; a Q3 launch failure is not.",
+        "grounded_in": ["[00:00] OK, so we need to pick an auth provider before Q3.", "[00:30] The Q3 deadline is binding because the enterprise contract launches then."],
+        "tuple": { "entity": "auth provider decision", "action": "answered", "core_claim": "ship Auth0 for Q3 then re-evaluate in Q4" }
+      }
+    ]
+  }
+}

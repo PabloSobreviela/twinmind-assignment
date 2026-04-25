@@ -16,13 +16,18 @@
  * 'openai/gpt-oss-120b' on Groq. Verified via Groq's model docs page
  * at console.groq.com/docs/model/openai/gpt-oss-120b.
  *
- * ERROR HANDLING
- * - 401 → apiKey invalid; surface clearly so the user can re-paste.
- * - 429 → rate limited; caller should back off. This wrapper does not
- *   auto-retry (the 30s batch cadence tolerates skipped batches better
- *   than stacked-up retries).
- * - Network errors → re-throw with a typed wrapper so the UI can show
- *   "Network error — check connection" without leaking raw stack traces.
+ * ERROR HANDLING — round-4c upgrade
+ * Previous classifyError dropped the API error message into err.cause,
+ * leaving the user-facing GroqCallError.message generic ("Groq call
+ * failed."). When runBatch threw at the catch site in useSession's
+ * runBatchNow, the console showed "Batch failed: GroqCallError: Groq
+ * call failed." — opaque to the diagnostic.
+ *
+ * Round-4c classifyError surfaces the SDK error's message, error.code,
+ * status, and (truncated) body in the GroqCallError.message itself. So
+ * a structured-output schema rejection now logs as:
+ *   GroqCallError: Groq call failed [status=400 code=invalid_request_error]: Invalid schema for response_format ...
+ * That is the diagnostic surface.
  */
 
 import OpenAI from 'openai';
@@ -75,11 +80,27 @@ function makeClient(apiKey: string): OpenAI {
 }
 
 function classifyError(err: unknown): never {
-  // OpenAI SDK surfaces status on the error object.
-  const status = (err as { status?: number })?.status;
-  if (status === 401) throw new GroqAuthError('Groq API key is invalid or expired.');
-  if (status === 429) throw new GroqRateLimitError('Groq rate limit exceeded.');
-  throw new GroqCallError('Groq call failed.', err);
+  const e = err as {
+    status?: number;
+    message?: string;
+    error?: { message?: string; type?: string; code?: string };
+    body?: unknown;
+  };
+  const status = e.status;
+  const apiMessage = e.error?.message ?? e.message ?? 'unknown error';
+  const apiCode = e.error?.code ? ` code=${e.error.code}` : '';
+  const bodyStr = e.body ? ` body=${JSON.stringify(e.body).slice(0, 500)}` : '';
+
+  if (status === 401) {
+    throw new GroqAuthError(`Groq API key is invalid or expired. ${apiMessage}`);
+  }
+  if (status === 429) {
+    throw new GroqRateLimitError(`Groq rate limit exceeded. ${apiMessage}`);
+  }
+  throw new GroqCallError(
+    `Groq call failed [status=${status ?? 'none'}${apiCode}]: ${apiMessage}${bodyStr}`,
+    err,
+  );
 }
 
 /**

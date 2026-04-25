@@ -1,0 +1,203 @@
+{
+  "name": "05-state-transitions",
+  "description": "Multi-segment session with deliberate state transitions: topic_intro -> claim_made -> decision_point -> lull. Tests that the routing table produces correct mixes across state changes. THE PROMPT-ENGINEERING THESIS DEMONSTRATION.",
+  "segments": [
+    {
+      "label": "A-topic-intro",
+      "input": {
+        "transcript": [
+          { "ts": 0, "chunk": "Today's topic is the new pricing structure for the enterprise tier." }
+        ],
+        "settings": { "rollingWindowSeconds": 180, "antiRepetitionBatchCount": 2, "fullSessionCharLimit": 50000 }
+      },
+      "expected": {
+        "classifier": {
+          "conversation_state": "topic_intro",
+          "state_evidence": "Single chunk introducing 'enterprise tier pricing structure' as the topic. No claims, no questions in flight.",
+          "salient_entities": ["enterprise tier pricing"],
+          "session_entities_delta": [
+            { "entity": "enterprise tier pricing", "op": "add", "attributed_to": null, "numeric_values": null }
+          ],
+          "open_questions": [],
+          "unclarified_terms": [],
+          "classifier_recommended_mix": ["talking", "question", "fact"]
+        },
+        "cards": [
+          {
+            "id": "expected-05A-talking",
+            "type": "talking",
+            "preview": "Enterprise pricing usually has three independent levers: base fee, per-seat, and minimum commit.",
+            "full_context": "Most B2B SaaS enterprise tiers separate flat platform fee, variable per-user usage, and a contractual floor. Each lever signals a different sales motion.",
+            "grounded_in": ["[00:00] Today's topic is the new pricing structure for the enterprise tier."],
+            "tuple": { "entity": "enterprise pricing levers", "action": "claimed", "core_claim": "three levers base per-seat minimum commit" }
+          },
+          {
+            "id": "expected-05A-question",
+            "type": "question",
+            "preview": "What's the customer pain that triggered redesigning the enterprise pricing now?",
+            "full_context": "Pricing redesigns usually have a triggering event. Naming the trigger constrains the design space and reveals the success criterion.",
+            "grounded_in": ["[00:00] Today's topic is the new pricing structure for the enterprise tier."],
+            "tuple": { "entity": "enterprise pricing redesign trigger", "action": "questioned", "core_claim": "what specific pain motivated this work" }
+          },
+          {
+            "id": "expected-05A-fact",
+            "type": "fact",
+            "preview": "Needs caveat: 'enterprise tier' means different things at $5M ARR vs $50M ARR companies.",
+            "full_context": "At $5M ARR, the enterprise tier is often anything above self-serve. At $50M-plus ARR, it's a separate sales motion with custom contracts.",
+            "grounded_in": ["[00:00] Today's topic is the new pricing structure for the enterprise tier."],
+            "tuple": { "entity": "enterprise tier definition", "action": "checked", "core_claim": "means different things at different company scales" }
+          }
+        ]
+      }
+    },
+    {
+      "label": "B-claim-made",
+      "input": {
+        "transcript": [
+          { "ts": 0, "chunk": "Today's topic is the new pricing structure for the enterprise tier." },
+          { "ts": 30, "chunk": "We're proposing $50k base plus $10 per seat with a 100-seat minimum." }
+        ],
+        "settings": { "rollingWindowSeconds": 180, "antiRepetitionBatchCount": 2, "fullSessionCharLimit": 50000 }
+      },
+      "expected": {
+        "classifier": {
+          "conversation_state": "claim_made",
+          "state_evidence": "Speaker proposing concrete pricing: $50k base, $10 per seat, 100-seat minimum.",
+          "salient_entities": ["enterprise tier pricing", "proposed structure"],
+          "session_entities_delta": [
+            { "entity": "proposed structure", "op": "add", "attributed_to": "speaker", "numeric_values": ["$50k base", "$10/seat", "100-seat minimum"] }
+          ],
+          "open_questions": [],
+          "unclarified_terms": [],
+          "classifier_recommended_mix": ["fact", "talking", "question"]
+        },
+        "cards": [
+          {
+            "id": "expected-05B-fact",
+            "type": "fact",
+            "preview": "Verified: $50k base plus 100-seat minimum at $10 per seat implies a $51k floor on annual contract value.",
+            "full_context": "$50,000 base plus 100 seats at $10/seat = $51,000 minimum annually. The minimum-commit floor is what makes the deal sellable to enterprise procurement.",
+            "grounded_in": ["[00:30] We're proposing $50k base plus $10 per seat with a 100-seat minimum."],
+            "tuple": { "entity": "proposed structure floor", "action": "checked", "core_claim": "$51k minimum annual at the proposed parameters" }
+          },
+          {
+            "id": "expected-05B-talking",
+            "type": "talking",
+            "preview": "$10 per seat is unusually low for enterprise — comparables typically land at $40-80/seat at this contract size.",
+            "full_context": "At $50k base plus 100-seat minimum, a $10/seat marginal rate suggests value capture happens almost entirely in the base. Makes upsell harder once seats grow because per-seat margin is thin.",
+            "grounded_in": ["[00:30] We're proposing $50k base plus $10 per seat with a 100-seat minimum."],
+            "tuple": { "entity": "per-seat pricing position", "action": "claimed", "core_claim": "$10 per seat is below enterprise comparables" }
+          },
+          {
+            "id": "expected-05B-question",
+            "type": "question",
+            "preview": "Does the 100-seat minimum apply to seat additions mid-contract, or only at signing and renewal?",
+            "full_context": "The minimum can be a starting floor (one-time gate at signing) or a sustained floor (must always have 100-plus seats). Different sales and customer-success implications.",
+            "grounded_in": ["[00:30] We're proposing $50k base plus $10 per seat with a 100-seat minimum."],
+            "tuple": { "entity": "100-seat minimum scope", "action": "questioned", "core_claim": "applies at signing or perpetually throughout contract" }
+          }
+        ]
+      }
+    },
+    {
+      "label": "C-decision-point",
+      "input": {
+        "transcript": [
+          { "ts": 0, "chunk": "Today's topic is the new pricing structure for the enterprise tier." },
+          { "ts": 30, "chunk": "We're proposing $50k base plus $10 per seat with a 100-seat minimum." },
+          { "ts": 60, "chunk": "Should we sell it bundled or as separate SKUs? Marketing wants bundled, sales wants separate." }
+        ],
+        "settings": { "rollingWindowSeconds": 180, "antiRepetitionBatchCount": 2, "fullSessionCharLimit": 50000 }
+      },
+      "expected": {
+        "classifier": {
+          "conversation_state": "decision_point",
+          "state_evidence": "Explicit decision being weighed (bundled vs separate SKUs) with two named stakeholder groups disagreeing (marketing vs sales).",
+          "salient_entities": ["bundled SKU", "separate SKUs", "marketing", "sales"],
+          "session_entities_delta": [
+            { "entity": "bundled SKU", "op": "add", "attributed_to": "marketing", "numeric_values": null },
+            { "entity": "separate SKUs", "op": "add", "attributed_to": "sales", "numeric_values": null }
+          ],
+          "open_questions": [],
+          "unclarified_terms": [],
+          "classifier_recommended_mix": ["question", "talking", "answer"]
+        },
+        "cards": [
+          {
+            "id": "expected-05C-question",
+            "type": "question",
+            "preview": "What does the customer typically buy first — the bundle or one specific SKU? That determines packaging.",
+            "full_context": "If customers consistently land on a single high-value SKU and add others later, separate SKUs make the entry purchase easier. If they buy the platform story upfront, bundled wins.",
+            "grounded_in": ["[01:00] Should we sell it bundled or as separate SKUs?"],
+            "tuple": { "entity": "customer first-purchase pattern", "action": "questioned", "core_claim": "first-buy SKU pattern determines packaging choice" }
+          },
+          {
+            "id": "expected-05C-talking",
+            "type": "talking",
+            "preview": "Marketing-vs-sales bundle disagreements usually trace to different metrics — top-of-funnel vs deal velocity.",
+            "full_context": "Marketing tends to favor bundled because it simplifies positioning. Sales tends to favor separate because it creates flexible entry points. The disagreement isn't really about packaging.",
+            "grounded_in": ["[01:00] Marketing wants bundled, sales wants separate."],
+            "tuple": { "entity": "marketing vs sales packaging conflict", "action": "claimed", "core_claim": "packaging disagreement rooted in different team metrics" }
+          },
+          {
+            "id": "expected-05C-answer",
+            "type": "answer",
+            "preview": "Ship separate SKUs with an optional bundle discount. Sales gets per-SKU flexibility; marketing leads with the bundle.",
+            "full_context": "Separate-SKUs-with-bundle-discount is a common compromise: sales gets per-SKU flexibility, marketing gets a bundled hero product, customers can self-select.",
+            "grounded_in": ["[01:00] Should we sell it bundled or as separate SKUs? Marketing wants bundled, sales wants separate."],
+            "tuple": { "entity": "separate SKUs with bundle discount", "action": "answered", "core_claim": "ship separate SKUs with optional bundle discount" }
+          }
+        ]
+      }
+    },
+    {
+      "label": "D-lull",
+      "input": {
+        "transcript": [
+          { "ts": 0, "chunk": "Today's topic is the new pricing structure for the enterprise tier." },
+          { "ts": 30, "chunk": "We're proposing $50k base plus $10 per seat with a 100-seat minimum." },
+          { "ts": 60, "chunk": "Should we sell it bundled or as separate SKUs? Marketing wants bundled, sales wants separate." },
+          { "ts": 90, "chunk": "Hmm. Yeah. Let me think." }
+        ],
+        "settings": { "rollingWindowSeconds": 180, "antiRepetitionBatchCount": 2, "fullSessionCharLimit": 50000 }
+      },
+      "expected": {
+        "classifier": {
+          "conversation_state": "lull",
+          "state_evidence": "Latest chunk is pure thinking-out-loud filler ('Hmm. Yeah. Let me think.') with no new content. Conversation has stalled on the decision.",
+          "salient_entities": [],
+          "session_entities_delta": [],
+          "open_questions": [],
+          "unclarified_terms": [],
+          "classifier_recommended_mix": ["question", "question", "question"]
+        },
+        "cards": [
+          {
+            "id": "expected-05D-q1",
+            "type": "question",
+            "preview": "Does the bundled-vs-separate decision need to land today, or is this a 'come back next meeting' question?",
+            "full_context": "Forcing-function questions help speakers decide whether to push or park. Knowing the urgency context unlocks the next move.",
+            "grounded_in": ["[01:30] Hmm. Yeah. Let me think."],
+            "tuple": { "entity": "bundled-vs-separate decision timing", "action": "questioned", "core_claim": "is decision needed today or deferrable" }
+          },
+          {
+            "id": "expected-05D-q2",
+            "type": "question",
+            "preview": "What part of the packaging question is hardest — customer signal, internal alignment, or pricing impact?",
+            "full_context": "Decomposing the stuck point surfaces what data or alignment is missing. Often the lull happens because three different uncertainties got tangled together.",
+            "grounded_in": ["[01:30] Hmm. Yeah. Let me think."],
+            "tuple": { "entity": "packaging decision blockers", "action": "questioned", "core_claim": "what specifically is hardest to resolve" }
+          },
+          {
+            "id": "expected-05D-q3",
+            "type": "question",
+            "preview": "Is there someone outside this conversation whose input would unstick this — a customer, exec, or finance partner?",
+            "full_context": "Lulls often signal a missing voice in the room. Naming who that voice would be is faster than continuing to think in a circle.",
+            "grounded_in": ["[01:30] Hmm. Yeah. Let me think."],
+            "tuple": { "entity": "decision stakeholder gap", "action": "questioned", "core_claim": "what external input would unstick this" }
+          }
+        ]
+      }
+    }
+  ]
+}

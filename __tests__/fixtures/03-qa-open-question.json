@@ -1,0 +1,57 @@
+{
+  "name": "03-qa-open-question",
+  "description": "Question_asked state — speaker asks an open technical question (Postgres pgvector to Qdrant migration), follow-up provides scale context, then topic drifts. Tests the [answer, talking, fact] mix.",
+  "input": {
+    "transcript": [
+      { "ts": 0, "chunk": "What's the right way to migrate from Postgres pgvector to a dedicated vector store like Qdrant — do you do it gradually or all at once?" },
+      { "ts": 30, "chunk": "We're at about 5 million vectors today, growing to maybe 50 million by end of year." },
+      { "ts": 60, "chunk": "Anyway, separately — anyone seen Anthropic's new pricing for batch jobs?" }
+    ],
+    "settings": {
+      "rollingWindowSeconds": 180,
+      "antiRepetitionBatchCount": 2,
+      "fullSessionCharLimit": 50000
+    }
+  },
+  "expected": {
+    "classifier": {
+      "conversation_state": "question_asked",
+      "state_evidence": "Speaker explicitly asks 'do you do it gradually or all at once' about a Postgres-to-Qdrant migration. The follow-up about scale (5M to 50M vectors) provides context. Final chunk introduces an unrelated topic, but the migration question remains unanswered.",
+      "salient_entities": ["Postgres pgvector", "Qdrant", "vector migration"],
+      "session_entities_delta": [
+        { "entity": "Postgres pgvector", "op": "add", "attributed_to": null, "numeric_values": ["5M vectors"] },
+        { "entity": "Qdrant", "op": "add", "attributed_to": null, "numeric_values": null },
+        { "entity": "vector migration", "op": "add", "attributed_to": null, "numeric_values": ["5M to 50M growth trajectory"] }
+      ],
+      "open_questions": ["gradual vs all-at-once Postgres-to-Qdrant migration approach"],
+      "unclarified_terms": [],
+      "classifier_recommended_mix": ["answer", "talking", "fact"]
+    },
+    "cards": [
+      {
+        "id": "expected-03-answer",
+        "type": "answer",
+        "preview": "Gradual migration: dual-write to both stores, verify Qdrant matches Postgres on shadow queries, then cut reads per-feature.",
+        "full_context": "Standard migration pattern for stateful storage swaps. Dual-write isolates correctness verification from cutover risk; shadow reads against the new store let you measure parity before any user traffic depends on it.",
+        "grounded_in": ["[00:00] What's the right way to migrate from Postgres pgvector to a dedicated vector store like Qdrant", "[00:30] We're at about 5 million vectors today, growing to maybe 50 million by end of year."],
+        "tuple": { "entity": "Postgres-to-Qdrant migration", "action": "answered", "core_claim": "dual-write plus shadow reads then per-feature cutover" }
+      },
+      {
+        "id": "expected-03-talking",
+        "type": "talking",
+        "preview": "5M-to-50M growth crosses the inflection where pgvector index rebuilds start hurting (typically past 10M rows).",
+        "full_context": "pgvector's HNSW index becomes a maintenance liability past ~10M rows on commodity hardware: rebuilds take hours and can lock writes. The 5M-to-50M trajectory crosses that threshold mid-year.",
+        "grounded_in": ["[00:30] We're at about 5 million vectors today, growing to maybe 50 million by end of year."],
+        "tuple": { "entity": "pgvector scale ceiling", "action": "claimed", "core_claim": "index rebuild times become operational pain past 10M rows" }
+      },
+      {
+        "id": "expected-03-fact",
+        "type": "fact",
+        "preview": "Verified: Qdrant supports hot-reload of HNSW index parameters during dual-write, no collection downtime needed.",
+        "full_context": "Qdrant's collection-update API allows changing HNSW parameters (m, ef_construct) without taking the collection offline. This matters for the dual-write phase because you can iterate on index tuning while migration is in progress.",
+        "grounded_in": ["[00:00] What's the right way to migrate from Postgres pgvector to a dedicated vector store like Qdrant"],
+        "tuple": { "entity": "Qdrant index configuration", "action": "checked", "core_claim": "hot-reload of HNSW params is supported in production" }
+      }
+    ]
+  }
+}

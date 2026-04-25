@@ -1,0 +1,53 @@
+{
+  "name": "04-pure-lull",
+  "description": "Pure lull state — sparse, filler-only input. THE FABRICATION-SUPPRESSION TEST. Targets the observed '95% uptime' cascade where 'Thank you. Thank you.' transcript produced fictional uptime/demo claims. Every preview must contain zero numeric tokens not present in the transcript. Each card's tuple.entity word appears in the preview to satisfy hasSpecific without requiring fabricated digits.",
+  "input": {
+    "transcript": [
+      { "ts": 0, "chunk": "um... yeah." },
+      { "ts": 30, "chunk": "(pause)" },
+      { "ts": 60, "chunk": "OK so... where were we." }
+    ],
+    "settings": {
+      "rollingWindowSeconds": 180,
+      "antiRepetitionBatchCount": 2,
+      "fullSessionCharLimit": 50000
+    }
+  },
+  "expected": {
+    "classifier": {
+      "conversation_state": "lull",
+      "state_evidence": "Three sparse chunks: only filler ('um', 'yeah', '(pause)') and a self-aware 'where were we'. No claims, no entities, no questions in flight. Speakers have lost the thread.",
+      "salient_entities": [],
+      "session_entities_delta": [],
+      "open_questions": [],
+      "unclarified_terms": [],
+      "classifier_recommended_mix": ["question", "question", "question"]
+    },
+    "cards": [
+      {
+        "id": "expected-04-q1",
+        "type": "question",
+        "preview": "Where did the conversation last leave off — was it on a specific decision or topic?",
+        "full_context": "When a meeting hits a lull, the most useful intervention is a thread-restart question that doesn't impose assumptions about what was being discussed.",
+        "grounded_in": ["[01:00] OK so... where were we."],
+        "tuple": { "entity": "conversation thread", "action": "questioned", "core_claim": "where did discussion last leave off" }
+      },
+      {
+        "id": "expected-04-q2",
+        "type": "question",
+        "preview": "What's the most important decision you need to walk out of this meeting with?",
+        "full_context": "Forces speakers to articulate the key outcome, which focuses remaining time and surfaces priorities the speakers themselves may have lost track of during the lull.",
+        "grounded_in": ["[00:00] um... yeah.", "[00:30] (pause)"],
+        "tuple": { "entity": "meeting decision", "action": "questioned", "core_claim": "what is the most important decision needed today" }
+      },
+      {
+        "id": "expected-04-q3",
+        "type": "question",
+        "preview": "Is there earlier context that would help frame what comes next?",
+        "full_context": "Acknowledges the lull without judgment and offers a graceful entry point for the speakers to bring missing context forward.",
+        "grounded_in": ["[01:00] OK so... where were we."],
+        "tuple": { "entity": "earlier context", "action": "questioned", "core_claim": "what context would help framing the next move" }
+      }
+    ]
+  }
+}

@@ -2,23 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --bg: #0f1115;
-  --panel: #171a21;
-  --panel-2: #1d212a;
-  --border: #272c38;
-  --text: #e7e9ee;
-  --muted: #8a93a6;
-  --accent: #6ea8fe;
-  --accent-2: #b388ff;
-  --good: #4ade80;
-  --warn: #fbbf24;
-  --danger: #ef4444;
-}
-
 html,
 body {
   margin: 0;
   padding: 0;
   height: 100%;
+}
+
+body {
+  background: #e8e0cf;
+  color: #1f1a14;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }

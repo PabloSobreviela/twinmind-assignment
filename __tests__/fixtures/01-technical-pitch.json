@@ -1,0 +1,58 @@
+{
+  "name": "01-technical-pitch",
+  "description": "Technical pitch state — speaker making concrete numerical claims about a vector DB (100M embeddings, 0.8ms p99, 40% cost vs Pinecone, HNSW+PQ). Tests claim_made classification and the [fact, talking, question] mix engaging with specific numbers.",
+  "input": {
+    "transcript": [
+      { "ts": 0, "chunk": "We're building a vector DB that handles 100 million embeddings with 0.8 millisecond p99 latency." },
+      { "ts": 30, "chunk": "Compared to Pinecone, our pricing comes in at about 40% cost reduction at this scale." },
+      { "ts": 60, "chunk": "We use HNSW indexing with product quantization — that's how we hit those latency numbers." }
+    ],
+    "settings": {
+      "rollingWindowSeconds": 180,
+      "antiRepetitionBatchCount": 2,
+      "fullSessionCharLimit": 50000
+    }
+  },
+  "expected": {
+    "classifier": {
+      "conversation_state": "claim_made",
+      "state_evidence": "Speaker is asserting concrete performance and pricing claims (100M embeddings, 0.8ms p99, 40% cost reduction vs Pinecone, HNSW+PQ).",
+      "salient_entities": ["vector DB", "Pinecone", "HNSW", "product quantization"],
+      "session_entities_delta": [
+        { "entity": "vector DB", "op": "add", "attributed_to": "speaker", "numeric_values": ["100M embeddings", "0.8ms p99", "40% cost reduction"] },
+        { "entity": "Pinecone", "op": "add", "attributed_to": null, "numeric_values": null },
+        { "entity": "HNSW indexing", "op": "add", "attributed_to": "speaker", "numeric_values": null },
+        { "entity": "product quantization", "op": "add", "attributed_to": "speaker", "numeric_values": null }
+      ],
+      "open_questions": [],
+      "unclarified_terms": [],
+      "classifier_recommended_mix": ["fact", "talking", "question"]
+    },
+    "cards": [
+      {
+        "id": "expected-01-fact",
+        "type": "fact",
+        "preview": "Verified: HNSW with product quantization routinely achieves sub-millisecond p99 at 100M-vector scale.",
+        "full_context": "HNSW (Hierarchical Navigable Small World) graphs with PQ compression are the standard high-recall ANN approach used by FAISS and Milvus benchmarks at 100M-plus scale. 0.8ms p99 is plausible on properly-provisioned hardware.",
+        "grounded_in": ["[00:00] We're building a vector DB that handles 100 million embeddings with 0.8 millisecond p99 latency."],
+        "tuple": { "entity": "HNSW with product quantization", "action": "checked", "core_claim": "sub-ms p99 at 100M scale is industry-standard" }
+      },
+      {
+        "id": "expected-01-talking",
+        "type": "talking",
+        "preview": "The 40% cost framing depends heavily on Pinecone's tier — serverless and pod pricing differ ~3x.",
+        "full_context": "Pinecone's serverless pricing is dramatically different from their pod-based pricing for the same workload. A 40% reduction vs serverless is a much weaker claim than 40% reduction vs pod pricing.",
+        "grounded_in": ["[00:30] Compared to Pinecone, our pricing comes in at about 40% cost reduction at this scale."],
+        "tuple": { "entity": "Pinecone pricing tiers", "action": "claimed", "core_claim": "serverless vs pod pricing differ approximately 3x" }
+      },
+      {
+        "id": "expected-01-question",
+        "type": "question",
+        "preview": "What's the index build time at 100 million vectors? That's where ops issues typically surface.",
+        "full_context": "Latency at query time is one dimension; build/rebuild time is another. At 100M scale, HNSW builds can take hours and become an operational bottleneck during reindexing or recovery.",
+        "grounded_in": ["[00:00] We're building a vector DB that handles 100 million embeddings with 0.8 millisecond p99 latency.", "[01:00] We use HNSW indexing with product quantization — that's how we hit those latency numbers."],
+        "tuple": { "entity": "vector DB build time", "action": "questioned", "core_claim": "what is index build time at 100 million scale" }
+      }
+    ]
+  }
+}
