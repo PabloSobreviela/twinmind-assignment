@@ -50,7 +50,7 @@ The replay harness runs every fixture through the rubric on every test run. Hand
 
 **Geist Sans as Styrene B stand-in.** Anthropic's product font is Klim Type Foundry's Styrene B, which is commercial. Geist (Vercel, OFL-licensed) is the closest free editorial sans we identified — humanist, slightly distinctive, fits the cream-paper aesthetic. The cream + oxblood + gold + ink palette derived from there.
 
-**TwinMind extension as reference point.** The TwinMind Chrome extension was our live-suggestions UX reference. The most visible structural choice in our submission is batch-stacking-with-demote-opacity — older batches stay visible at 0.55 opacity rather than scrolling out, so participants can scan recent context while the freshest batch anchors as "right now."
+**TwinMind extension access.** We attempted to evaluate the live-suggestions feature in the production TwinMind extension and Chrome app before building, but the surface wasn't reachable during normal extension use — possibly gated to detected calls or limited rollout. This implementation follows the assignment's reference UI/UX prototype literally, with the classifier-then-router pattern and stacking-batch demote as our specific design choices.
 
 ## What I'd do with more time
 
