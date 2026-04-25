@@ -5,44 +5,29 @@
  *   runBatch(state)         → classifier → routing → 3 parallel generators → Batch
  *   runChat(state, input)   → streaming chat completion (card-click or typed)
  *
- * STATE MUTATION CONTRACT
+ * ROUND-4a EDITS
+ * - PipelineState gains optional `prompts` override map. Defaults to the
+ *   shipped system prompts; round 5's settings UI lets the user supply
+ *   alternatives. The override plumbing ships now so round 5 is a UI
+ *   change only.
+ * - Card type gains `id`. Stamped via generateCardId() at parse time.
+ *   Used by the chat-side ChatTurn audit (source_card_id) so the replay
+ *   harness can correlate card-click chats back to their originating card.
+ *   generateCardId falls back from crypto.randomUUID to Math.random for
+ *   Node <19 — Vitest runs in Node and Card-construction will end up in
+ *   round-4b tests; the fallback removes a Node-version landmine.
+ *
+ * STATE MUTATION CONTRACT (unchanged from round 3)
  * - runBatch mutates state.entityPool (via applyEntityDelta) after classifier
  *   returns, before generators run — generators see the merged pool.
  * - runBatch does NOT push to state.batches. Caller appends the returned
- *   Batch once the batch is confirmed (e.g. after rendering to UI).
- *   Render-then-commit: if rendering fails, state isn't corrupted.
+ *   Batch once confirmed (render-then-commit).
  * - runChat does NOT mutate state.
  *
- * CHAT HISTORY CONTRACT (important — affects caller-side UI wiring)
- * Caller appends RAW input strings to state.chatHistory — NOT the
- * transcript-wrapped form that runChat actually sends to the API. Use
- * chatHistoryEntryFromInput(input) from prompts/chat.ts to produce the
- * canonical raw string:
- *   - user_question → the plain userMessage string
- *   - card_click   → the "Expanding on this suggestion:\n..." body
- *                    (no transcript preamble)
+ * CHAT HISTORY CONTRACT (unchanged from round 3) — see round-3 docs.
  *
- * runChat wraps ONLY the current turn with the <session_transcript>
- * preamble. Older turns in chatHistory stay slim. The transcript grows
- * across the session but doesn't duplicate into history on every turn —
- * preserves system-prompt cache hits and prevents token ballooning.
- * (5 turns × 50k-char transcript without this split = 250k redundant
- * chars; with the split, transcript appears exactly once per batch.)
- *
- * After streaming completes, the caller does:
- *   state.chatHistory.push({ role: 'user',      content: chatHistoryEntryFromInput(input) });
- *   state.chatHistory.push({ role: 'assistant', content: <accumulated stream> });
- *
- * TEMPERATURES (call-site, not prompt-level)
- *   classifier: 0.2 — stability. Classifier output drives routing;
- *     flipping state mid-conversation wastes a batch.
- *   generators: 0.7 — diversity. Locked rationale in shared.ts.
- *   chat:       0.5 — balance. Too low rubber-stamps the card; too
- *     high drifts from the committed preview.
- *
- * REASONING EFFORT
- *   classifier + generators: low (speed matters at 30s cadence)
- *   chat:                    high (quality matters post-click)
+ * TEMPERATURES (unchanged)  classifier 0.2 / generators 0.7 / chat 0.5.
+ * REASONING EFFORT (unchanged)  classifier+generators low / chat high.
  */
 
 import {
@@ -87,18 +72,34 @@ import {
 } from './schemas';
 import type { SuggestionType } from '../types';
 
-// Re-export chat-side helpers the caller needs for history management.
 export { chatHistoryEntryFromInput };
 export type { ChatInput };
 
-const GENERATOR_SYSTEM_PROMPTS: Record<SuggestionType, string> = {
+const DEFAULT_GENERATOR_SYSTEM_PROMPTS: Record<SuggestionType, string> = {
   question: QUESTION_SYSTEM_PROMPT,
   talking:  TALKING_SYSTEM_PROMPT,
   answer:   ANSWER_SYSTEM_PROMPT,
   fact:     FACT_SYSTEM_PROMPT,
 };
 
+/**
+ * Generates a card correlation token. Prefers crypto.randomUUID when
+ * available (modern browsers and Node 19+); falls back to a base36
+ * concatenation of Math.random and Date.now for older Node runtimes
+ * (Vitest may run on Node 18, where randomUUID is unavailable).
+ *
+ * Card IDs are correlation tokens for the export audit trail, NOT
+ * security tokens — the fallback's lower entropy is acceptable.
+ */
+function generateCardId(): string {
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    Math.random().toString(36).slice(2) + Date.now().toString(36)
+  );
+}
+
 export type Card = {
+  id: string;
   type: SuggestionType;
   preview: string;
   full_context: string;
@@ -106,17 +107,32 @@ export type Card = {
   tuple: Tuple;
 };
 
+/**
+ * Optional per-prompt overrides. Any field left undefined falls back to
+ * the shipped default. Used by the round-5 settings UI to let users
+ * edit prompts at runtime; ships in round 4a as plumbing only.
+ */
+export type PromptOverrides = {
+  classifier?: string;
+  question?: string;
+  talking?: string;
+  answer?: string;
+  fact?: string;
+  chat?: string;
+};
+
 export type PipelineState = {
   apiKey: string;
   transcript: TranscriptChunk[];
   entityPool: SessionEntity[];
   batches: Batch[];
-  chatHistory: ChatMessage[]; // Raw-input form; see CHAT HISTORY CONTRACT above.
+  chatHistory: ChatMessage[]; // Raw-input form; see CHAT HISTORY CONTRACT in round-3 docs.
   settings: {
     rollingWindowSeconds: number;
     antiRepetitionBatchCount: number;
     fullSessionCharLimit: number;
   };
+  prompts?: PromptOverrides;
 };
 
 // -------------------- runBatch --------------------
@@ -126,12 +142,14 @@ export async function runBatch(state: PipelineState, nowTs: number): Promise<Bat
   const poolBeforeDelta = formatEntityPool(state.entityPool);
   const previousTuples  = formatPreviousBatchTuples(state.batches, state.settings.antiRepetitionBatchCount);
 
+  const classifierSystem = state.prompts?.classifier ?? CLASSIFIER_SYSTEM_PROMPT;
+
   const classifierStart = Date.now();
   const classifierRaw = await callGroq({
     apiKey: state.apiKey,
     model: MODEL_ID,
     messages: [
-      { role: 'system', content: CLASSIFIER_SYSTEM_PROMPT },
+      { role: 'system', content: classifierSystem },
       {
         role: 'user',
         content: CLASSIFIER_USER_TEMPLATE({
@@ -161,6 +179,9 @@ export async function runBatch(state: PipelineState, nowTs: number): Promise<Bat
     previousBatchTuples: previousTuples,
   });
 
+  const generatorSystemFor = (type: SuggestionType): string =>
+    state.prompts?.[type] ?? DEFAULT_GENERATOR_SYSTEM_PROMPTS[type];
+
   const generatorResults = await Promise.all(
     mix.map(async (type) => {
       const start = Date.now();
@@ -168,7 +189,7 @@ export async function runBatch(state: PipelineState, nowTs: number): Promise<Bat
         apiKey: state.apiKey,
         model: MODEL_ID,
         messages: [
-          { role: 'system', content: GENERATOR_SYSTEM_PROMPTS[type] },
+          { role: 'system', content: generatorSystemFor(type) },
           { role: 'user', content: generatorUserMsg },
         ],
         responseFormat: { type: 'json_schema', json_schema: GENERATOR_SCHEMAS[type] },
@@ -176,8 +197,9 @@ export async function runBatch(state: PipelineState, nowTs: number): Promise<Bat
         temperature: 0.7,
       });
       const latencyMs = Date.now() - start;
-      const parsed = JSON.parse(raw) as Omit<Card, 'type'>;
-      return { card: { type, ...parsed } as Card, latencyMs };
+      const parsed = JSON.parse(raw) as Omit<Card, 'type' | 'id'>;
+      const card: Card = { id: generateCardId(), type, ...parsed };
+      return { card, latencyMs };
     })
   );
 
@@ -194,14 +216,6 @@ export async function runBatch(state: PipelineState, nowTs: number): Promise<Bat
 
 // -------------------- runChat --------------------
 
-/**
- * Stream a chat response. Does NOT mutate state.
- *
- * state.chatHistory contains raw user inputs (not transcript-wrapped).
- * This function wraps ONLY the current turn with <session_transcript>
- * before sending. See CHAT HISTORY CONTRACT in the file JSDoc for how
- * the caller should persist the turn after streaming completes.
- */
 export async function* runChat(
   state: PipelineState,
   input: ChatInput,
@@ -220,9 +234,11 @@ export async function* runChat(
           userMessage: input.userMessage,
         });
 
+  const chatSystem = state.prompts?.chat ?? CHAT_SYSTEM_PROMPT;
+
   const messages: ChatMessage[] = [
-    { role: 'system', content: CHAT_SYSTEM_PROMPT },
-    ...state.chatHistory, // raw-input form; no transcript preamble in prior turns
+    { role: 'system', content: chatSystem },
+    ...state.chatHistory,
     { role: 'user', content: currentUserContent },
   ];
 
